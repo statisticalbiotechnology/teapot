@@ -132,6 +132,7 @@ Write `reference_list` in anything new.
 | `assert_rt_coherent` | stops if the two halves of a merged library are not on one RT scale |
 | `assert_background_adequate` | stops if the background has fewer than `background_min_targets` peptides |
 | `strip_reference_decoys` | decoy-free copy of the reference list, for diathem |
+| `normalize_reference_mods` | rewrites reference compounds to the library's modification notation (EncyclopeDIA PRM routes), see below |
 
 ### `openms/`, `context_ms/`, `pyprophet/`, `tric/`
 
@@ -184,6 +185,18 @@ decoys to estimate a reference-side FDR.
   list. `ADD_DECOYS_TO_REFERENCE_LIST` runs on a list derived from a `.blib`, and on
   a supplied list that `reference_list_has_decoys()` in `main.nf` finds without
   decoy rows (both gated on `add_decoys_to_reference_list`).
+  The list with decoys is what `CONTEXT_SEARCH` receives in each sample row.
+  Until 2026-10 it received the samplesheet's decoy-free file instead, so the
+  reference side had no decoys, the null Gaussian was degenerate, and a reference
+  q value was 0 exactly when the LDA score was above 0.
+* EncyclopeDIA: Context matches reference compounds to library entries as
+  strings (after stripping flanking residues), so `C[+57.0]` never equals the
+  library's `C[+57.0214635]`. `NORMALIZE_REFERENCE_MODS` therefore rewrites each
+  compound to the library entry with the same stripped sequence and the same
+  modification masses (to 0.1 Da) at the same positions, before decoys are added.
+  Not fixed here, in the fork: the duplicated split loop in
+  `ContextFeatureScorer` (it appends every feature to the background a second
+  time).
 * OpenSWATH: decoys come from the `.pqp`. `SPLIT_OPENSWATH_FEATURES` reads
   `P.DECOY` from the `.osw` and pairs a decoy to its target through
   `DECOY_<target TRAML_ID>`. It uses the reference list only as a set of sequences.
