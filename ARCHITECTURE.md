@@ -266,13 +266,15 @@ config uses `withLabel`.
 | OpenMS | `openswath_container` | digest | `openswath_workflow`, `_assay_generator`, `_decoy_generator` |
 | PyProphet | `pyprophet_container` | digest | the six `pyprophet_*` tool modules |
 | Context-MS | `context_container` | tag `main` | `context_ms_run` |
-| diathem | `diathem_container` | tag `quant` | `diathem_quant` |
+| diathem | `diathem_container` | digest (image of diathem `main`) | `diathem_quant` |
 | msproteomicstools | none, hardcoded | tag `latest` | `tric_feature_alignment` |
 | ProteoWizard | `msconvert_container` | none | `msconvert` |
 | pandas | `python_container` | tag `2.2.1` | the other 24: all of `library/` and `quant/`, every other `assert_*`, and the Python conversions |
 
 OpenMS and PyProphet were pinned by digest after `latest` changed their CLIs
-mid-development. Images still on moving tags can change under you.
+mid-development, and diathem is pinned to the digest of the image built from its
+`main`; update the digest deliberately when diathem changes. Images still on
+moving tags can change under you.
 
 The Python image must contain pandas and `ps`: the Nextflow task wrapper exits
 without `ps`, and installing pandas at task time needs network and a writable
@@ -454,7 +456,9 @@ Both are pulled as images; these are the changes an upgrade must keep.
 | `Locale.US` formatting, pi0 capped at 1.0, delimiter auto-detection, optional `isDecoy`, Koina URL helper | correctness |
 | real version, unused native dependencies dropped, pinned image base | reproducible, smaller image |
 
-**diathem: branch `quant` of `statisticalbiotechnology/diathem`.** Adds
+**diathem: `main` of `statisticalbiotechnology/diathem`** (into which the former
+`quant` branch is merged; the image is built by that repository's CI on every
+push to `main` and pinned here by digest). Adds
 `--fragment-tol-th` (`diathem_fragment_tol_th`). Ion-trap fragment error is
 roughly constant in Th, which no single ppm value can express; with ppm tolerances
 on ion-trap data the shared fragment-ratio fit collapsed onto one fragment. Without
