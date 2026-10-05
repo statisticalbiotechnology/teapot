@@ -2,8 +2,11 @@ process CONTEXT_SEARCH {
     label 'encyclopedia'
     tag   "${meta.id}"
 
+    // the run file itself is staged as an output for libexport; do not publish
+    // a copy of it (one per run, the size of the mzML)
     publishDir path: { "${params.outdir}/context_search/${meta.id}" },
-               mode: params.publish_mode
+               mode: params.publish_mode,
+               saveAs: { fn -> fn ==~ /(?i).*\.(mzml|mzxml|dia)$/ ? null : fn }
 
     input:
     tuple val(meta), path(prm), path(reference_list)
