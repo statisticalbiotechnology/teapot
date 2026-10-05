@@ -220,7 +220,7 @@ built by hand.
 | `openswath_container` | `ghcr.io/openswath/openswath@sha256:509feb438a20252585ff77e05c08a2cd41227ea290e07a959f842a144b6703b8` | OpenMS |
 | `pyprophet_container` | `ghcr.io/pyprophet/pyprophet@sha256:fb473fe3222305a94ffd7f9b2900d2d863c182d44108e02daff445e0b7ad08b8` | PyProphet |
 | `context_container` | `ghcr.io/shannon225/context-ms:main` | Context-MS |
-| `diathem_container` | `ghcr.io/statisticalbiotechnology/diathem@sha256:685bf30a…` (diathem `main`, commit `ae8643f`) | diathem |
+| `diathem_container` | `ghcr.io/statisticalbiotechnology/diathem@sha256:685bf30ae4c8e58995443c727e740815869976cdae7b3ae8a5589e3cd7a87e57` | diathem |
 | `python_container` | `quay.io/biocontainers/pandas:2.2.1` | Python |
 | `msconvert_container` | `proteowizard/pwiz-skyline-i-agree-to-the-vendor-licenses` | Proteowizard msconvert |
 | `container_cache_dir` | `<pipeline>/apptainer_cache` | where images are stored. Kept outside `outdir`, so they are pulled once and reused by later runs |

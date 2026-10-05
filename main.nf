@@ -11,7 +11,6 @@ include { OPENSWATH_PRM                } from './subworkflows/local/openswath_pr
 include { MSCONVERT                    } from './modules/local/msconvert/msconvert'
 include { ADD_DECOYS_TO_REFERENCE_LIST } from './modules/local/encyclopedia/add_decoys_to_reference_list'
 include { NORMALIZE_REFERENCE_MODS     } from './modules/local/library/normalize_reference_mods'
-include { NORMALIZE_REFERENCE_MODS as NORMALIZE_DERIVED_REFERENCE_MODS } from './modules/local/library/normalize_reference_mods'
 
 
 def helpMessage() {
@@ -356,9 +355,6 @@ workflow {
         def enc_prm_targets
         if (has_enc_prm) {
             if (enc_prm_sample_rl != null) {
-                // Context matches reference compounds to library entries as
-                // strings, so the list must use the library's modification
-                // notation (C[+57.0] never equals C[+57.0214635]).
                 NORMALIZE_REFERENCE_MODS(Channel.value(enc_prm_sample_rl),
                                          PREPARE_LIBRARY_ENCYCLOPEDIA.out.library)
                 def enc_prm_rl = NORMALIZE_REFERENCE_MODS.out.reference_list
@@ -376,20 +372,14 @@ workflow {
                 } else {
                     enc_prm_targets = enc_prm_rl
                 }
-                // CONTEXT_SEARCH reads the reference list of each sample row;
-                // it must be the processed list (normalized, with decoys), not
-                // the samplesheet's file, or the reference side has no null.
                 enc_prm_samples = by_route.enc_prm
                     .combine(enc_prm_targets)
                     .map { meta, f, _orig_rl, rl -> tuple(meta, f, rl) }
             } else if (params.blib) {
-                NORMALIZE_DERIVED_REFERENCE_MODS(
-                    PREPARE_LIBRARY_ENCYCLOPEDIA.out.reference_list_derived,
-                    PREPARE_LIBRARY_ENCYCLOPEDIA.out.library)
-                enc_prm_targets = NORMALIZE_DERIVED_REFERENCE_MODS.out.reference_list
                 enc_prm_samples = by_route.enc_prm
-                    .combine(enc_prm_targets)
+                    .combine(PREPARE_LIBRARY_ENCYCLOPEDIA.out.reference_list_derived)
                     .map { meta, f, _orig_rl, derived -> tuple(meta, f, derived) }
+                enc_prm_targets = PREPARE_LIBRARY_ENCYCLOPEDIA.out.reference_list_derived
             } else {
                 error "encyclopedia+PRM samples need a reference_list, either " +
                       "in the samplesheet's reference_list column, or via " +

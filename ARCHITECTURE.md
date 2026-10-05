@@ -12,7 +12,7 @@ nextflow.config         every parameter and its default; profiles
 conf/base.config        resource defaults, always included
 conf/slurm.config       site overrides, added with -c
 subworkflows/local/     7: four routes, PREPARE_LIBRARY_ENCYCLOPEDIA/_OPENSWATH, PREPARE_BACKGROUND
-modules/local/<domain>/ 46 processes, one per file
+modules/local/<domain>/ 47 processes, one per file
 bin/                    Python called by modules, on PATH inside every task
 lib/                    Groovy helpers, loaded automatically by Nextflow
 assets/                 patch for contextbook, read from projectDir
@@ -94,9 +94,9 @@ are `params.encyclopedia_container` and `params.context_container`.
 
 "Reference list" is our term: the samplesheet column `reference_list`, the param
 `reference_list_decoy_jar`, the modules `add_decoys_to_reference_list`,
-`blib_to_reference_list`, `dlib_to_reference_list`, `strip_reference_decoys`, and
-all documentation. "Mass list" appears only where EncyclopeDIA's own names force
-it: the `-massList` flag, `MassListDecoyGenerator`,
+`blib_to_reference_list`, `dlib_to_reference_list`, `normalize_reference_mods`,
+`strip_reference_decoys`, and all documentation. "Mass list" appears only where
+EncyclopeDIA's own names force it: the `-massList` flag, `MassListDecoyGenerator`,
 `IsolationWindowReader.parseMassList`,
 `ContextFeatureScorer.findMatchingMassListWindow`, and
 `assets/masslist-decoys.jar`. `main.nf` errors on `mass_list` in the samplesheet.
@@ -132,7 +132,7 @@ Write `reference_list` in anything new.
 | `assert_rt_coherent` | stops if the two halves of a merged library are not on one RT scale |
 | `assert_background_adequate` | stops if the background has fewer than `background_min_targets` peptides |
 | `strip_reference_decoys` | decoy-free copy of the reference list, for diathem |
-| `normalize_reference_mods` | rewrites reference compounds to the library's modification notation (EncyclopeDIA PRM routes), see below |
+| `normalize_reference_mods` | rewrites a supplied reference list to the library's modification notation (EncyclopeDIA PRM route), see below |
 
 ### `openms/`, `context_ms/`, `pyprophet/`, `tric/`
 
@@ -182,26 +182,47 @@ modules inline their Python in a heredoc.
 decoys to estimate a reference-side FDR.
 
 * EncyclopeDIA: the reference list is the target set, so decoys are added to the
-  list. `ADD_DECOYS_TO_REFERENCE_LIST` runs on a list derived from a `.blib`, and on
-  a supplied list that `reference_list_has_decoys()` in `main.nf` finds without
-  decoy rows (both gated on `add_decoys_to_reference_list`).
-  The list with decoys is what `CONTEXT_SEARCH` receives in each sample row.
-  Until 2026-10 it received the samplesheet's decoy-free file instead, so the
-  reference side had no decoys, the null Gaussian was degenerate, and a reference
-  q value was 0 exactly when the LDA score was above 0.
-* EncyclopeDIA: Context matches reference compounds to library entries as
-  strings (after stripping flanking residues), so `C[+57.0]` never equals the
-  library's `C[+57.0214635]`. `NORMALIZE_REFERENCE_MODS` therefore rewrites each
-  compound to the library entry with the same stripped sequence and the same
-  modification masses (to 0.1 Da) at the same positions, before decoys are added.
-  Not fixed here, in the fork: the duplicated split loop in
-  `ContextFeatureScorer` (it appends every feature to the background a second
-  time).
+  list. `ADD_DECOYS_TO_REFERENCE_LIST` runs on a list derived from a `.blib` (in
+  `PREPARE_LIBRARY_ENCYCLOPEDIA`), and in `main.nf` on a supplied list that
+  `reference_list_has_decoys()` finds without decoy rows (both gated on
+  `add_decoys_to_reference_list`).
+  Context splits its features by string equality with the list's compounds, and
+  a decoy feature is the reversed library entry (§9), so a reference decoy counts
+  only if the list holds exactly that reversed string, as the generated decoys do.
+  The processed list is what `CONTEXT_SEARCH` receives in every sample row, and
+  also what diathem (decoys stripped) and `FINALIZE_QUANT` read. A supplied list
+  is the one named in the first EncyclopeDIA PRM row, and every such row gets it.
+  Until 2026-10 a supplied list reached `CONTEXT_SEARCH` as the samplesheet file,
+  without the generated decoys, so the reference side had no decoys, the null
+  Gaussian was degenerate, and a reference q value was 0 exactly when the LDA
+  score was above 0.
+* EncyclopeDIA: because matching is by string, `C[+57.0]` never equals the
+  library's `C[+57.0214635]`. `NORMALIZE_REFERENCE_MODS` rewrites a supplied list,
+  before decoys are added. A compound that equals a library `PeptideModSeq` is
+  kept. Otherwise it takes the spelling of the library entry with the same
+  stripped sequence and the same modification masses (to 0.1 Da) at the same
+  positions, if exactly one spelling matches; with several it is kept, because a
+  merged library can spell one peptidoform differently in its reference and
+  background halves, and picking the background's would move the reference
+  peptide into the background. A `.blib`-derived list is not normalized: it is
+  built from the same `.blib` as the library. In a supplied list that already has
+  decoys, decoy rows match no library entry and keep their notation, even when
+  their target is rewritten.
+* EncyclopeDIA, not fixed here (in `contextbook`): `ContextFeatureScorer` splits
+  the features twice. The second loop compares the feature sequence with its
+  flanking residues, never matches, and appends every feature to the background
+  again, so the background file holds each background feature twice and every
+  reference feature (target and decoy) once. The LDA is trained on that file, so
+  it also sees the reference features it then scores. `context` keeps only the
+  first loop.
 * OpenSWATH: decoys come from the `.pqp`. `SPLIT_OPENSWATH_FEATURES` reads
   `P.DECOY` from the `.osw` and pairs a decoy to its target through
   `DECOY_<target TRAML_ID>`. It uses the reference list only as a set of sequences.
   `main.nf` adds no decoys to an OpenSWATH PRM list, because the same file feeds
-  iRT anchor derivation.
+  iRT anchor derivation. `OSWPRM_CONTEXT_SEARCH`
+  (`openswath_prm_encyclopedia_quant`) therefore runs Context on a list without
+  decoys unless the user supplied them. Its q values feed only
+  `OPENSWATH_PRM_LIBEXPORT`, that is `abundance_encyclopedia`.
 
 **User decoys in an OpenSWATH library are replaced.** Every OpenSWATH source except
 `--openswath_pqp` goes through `OPENSWATH_ASSAY_GENERATOR` then
@@ -269,7 +290,7 @@ config uses `withLabel`.
 | diathem | `diathem_container` | digest (image of diathem `main`) | `diathem_quant` |
 | msproteomicstools | none, hardcoded | tag `latest` | `tric_feature_alignment` |
 | ProteoWizard | `msconvert_container` | none | `msconvert` |
-| pandas | `python_container` | tag `2.2.1` | the other 24: all of `library/` and `quant/`, every other `assert_*`, and the Python conversions |
+| pandas | `python_container` | tag `2.2.1` | the other 25: all of `library/` and `quant/`, every other `assert_*`, and the Python conversions |
 
 OpenMS and PyProphet were pinned by digest after `latest` changed their CLIs
 mid-development, and diathem is pinned to the digest of the image built from its
@@ -456,10 +477,8 @@ Both are pulled as images; these are the changes an upgrade must keep.
 | `Locale.US` formatting, pi0 capped at 1.0, delimiter auto-detection, optional `isDecoy`, Koina URL helper | correctness |
 | real version, unused native dependencies dropped, pinned image base | reproducible, smaller image |
 
-**diathem: `main` of `statisticalbiotechnology/diathem`** (into which the former
-`quant` branch is merged; the image is built by that repository's CI on every
-push to `main` and pinned here by digest). Adds
-`--fragment-tol-th` (`diathem_fragment_tol_th`). Ion-trap fragment error is
+**diathem: `main` of `statisticalbiotechnology/diathem`**; TEAPOT pins it by digest.
+Adds `--fragment-tol-th` (`diathem_fragment_tol_th`). Ion-trap fragment error is
 roughly constant in Th, which no single ppm value can express; with ppm tolerances
 on ion-trap data the shared fragment-ratio fit collapsed onto one fragment. Without
 the flag the ppm behavior is unchanged. The image also installs `procps`, so
